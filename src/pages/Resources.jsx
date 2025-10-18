@@ -4,7 +4,7 @@ import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import { db } from '../firebase';
 
 const LOCAL_KEY = 'sams_authenticated';
-const CORRECT_PASSWORD = '354790526345352';
+const CORRECT_PASSWORD = 'SAMS354790';
 
 function Resources() {
   const [resources, setResources] = useState([]);
