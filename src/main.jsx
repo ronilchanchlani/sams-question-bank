@@ -9,6 +9,7 @@ import About from './pages/About.jsx';
 import Contact from './pages/Contact.jsx';
 import Resources from './pages/Resources.jsx'; // import Resources
 
+
 ReactDOM.createRoot(document.getElementById('root')).render(
   <BrowserRouter>
     <Routes>
