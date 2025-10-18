@@ -5,23 +5,23 @@ import { db } from '../firebase';
 console.log("Questions.jsx is being rendered");
 
 const LOCAL_KEY = 'sams_authenticated'; // localStorage key
-const CORRECT_PASSWORD = 'WeLoveSAMS';
+const CORRECT_PASSWORD = 'SAMS354790';
 
 function Questions() {
+  const [years, setYears] = useState([]);
+  const [selectedYear, setSelectedYear] = useState('');
   const [topics, setTopics] = useState([]);
   const [selectedTopic, setSelectedTopic] = useState('');
   const [questions, setQuestions] = useState([]);
   const [expandedQuestion, setExpandedQuestion] = useState(null);
 
-  // track which questions have been revealed & which option the user selected
   const [revealedAnswers, setRevealedAnswers] = useState({});
   const [selectedAnswers, setSelectedAnswers] = useState({});
 
-  // auth/password state
   const [enteredPassword, setEnteredPassword] = useState('');
   const [authenticated, setAuthenticated] = useState(false);
 
-  // check localStorage on mount to remember login
+  // Check localStorage to remember login
   useEffect(() => {
     const stored = localStorage.getItem(LOCAL_KEY);
     if (stored === 'true') {
@@ -29,7 +29,6 @@ function Questions() {
     }
   }, []);
 
-  // login handler
   const handleLogin = (e) => {
     e && e.preventDefault();
     if (enteredPassword.trim() === CORRECT_PASSWORD) {
@@ -40,12 +39,12 @@ function Questions() {
     }
   };
 
-  // logout handler
   const handleLogout = () => {
     setAuthenticated(false);
     setEnteredPassword('');
     localStorage.removeItem(LOCAL_KEY);
-    // clear any loaded data
+    setYears([]);
+    setSelectedYear('');
     setTopics([]);
     setSelectedTopic('');
     setQuestions([]);
@@ -54,11 +53,38 @@ function Questions() {
     setSelectedAnswers({});
   };
 
-  // Fetch topics in real-time once authenticated
+  // Fetch years in real-time once authenticated
   useEffect(() => {
     if (!authenticated) return;
 
     const q = collection(db, 'questions');
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const uniqueYears = new Set();
+      snapshot.forEach((doc) => {
+        const data = doc.data() || {};
+        if (data.year) uniqueYears.add(data.year);
+      });
+      setYears(Array.from(uniqueYears).sort());
+    }, (err) => {
+      console.error('Failed to fetch years:', err);
+    });
+
+    return () => unsubscribe();
+  }, [authenticated]);
+
+  // Fetch topics based on selected year
+  useEffect(() => {
+    if (!authenticated || !selectedYear) {
+      setTopics([]);
+      setSelectedTopic('');
+      return;
+    }
+
+    const q = query(
+      collection(db, 'questions'),
+      where('year', '==', selectedYear)
+    );
+
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const uniqueTopics = new Set();
       snapshot.forEach((doc) => {
@@ -71,16 +97,18 @@ function Questions() {
     });
 
     return () => unsubscribe();
-  }, [authenticated]);
+  }, [selectedYear, authenticated]);
 
-  // Fetch questions for selected topic in real-time
+  // Fetch questions for selected year + topic
   useEffect(() => {
-    if (!authenticated || !selectedTopic) return;
+    if (!authenticated || !selectedYear || !selectedTopic) return;
 
     const q = query(
       collection(db, 'questions'),
+      where('year', '==', selectedYear),
       where('topic', '==', selectedTopic)
     );
+
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const questionsData = [];
       snapshot.forEach((doc) => {
@@ -95,7 +123,7 @@ function Questions() {
     });
 
     return () => unsubscribe();
-  }, [selectedTopic, authenticated]);
+  }, [selectedYear, selectedTopic, authenticated]);
 
   const toggleExplanation = (questionId) => {
     setExpandedQuestion(expandedQuestion === questionId ? null : questionId);
@@ -106,7 +134,6 @@ function Questions() {
   };
 
   const handleOptionClick = (questionId, index) => {
-    // lock after first click
     if (selectedAnswers[questionId] !== undefined) return;
 
     setSelectedAnswers(prev => ({
@@ -120,7 +147,6 @@ function Questions() {
     }));
   };
 
-  // Password gate UI (with remembered-login)
   if (!authenticated) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-orange-50">
@@ -149,7 +175,6 @@ function Questions() {
     );
   }
 
-  // Normal Questions UI after login
   return (
     <div className='bg-gradient-to-b from-orange-100 to-orange-50 min-h-screen py-12 px-6 md:px-12'>
       <div className="max-w-4xl mx-auto">
@@ -165,29 +190,52 @@ function Questions() {
           </div>
         </div>
 
-        <div className="mb-8">
-          <label htmlFor="topic-select" className="block text-lg font-medium text-orange-700 mb-2">
-            Select a Topic:
+        {/* Year Selector */}
+        <div className="mb-4">
+          <label htmlFor="year-select" className="block text-lg font-medium text-orange-700 mb-2">
+            Select Year:
           </label>
           <select
-            id="topic-select"
-            value={selectedTopic}
-            onChange={(e) => setSelectedTopic(e.target.value)}
+            id="year-select"
+            value={selectedYear}
+            onChange={(e) => setSelectedYear(e.target.value)}
             className="w-full p-3 border border-orange-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
           >
-            <option value="">-- Select a topic --</option>
-            {topics.map((topic) => (
-              <option key={topic} value={topic}>
-                {topic}
+            <option value="">-- Select a year --</option>
+            {years.map((year) => (
+              <option key={year} value={year}>
+                {year}
               </option>
             ))}
           </select>
         </div>
 
+        {/* Topic Selector */}
+        {selectedYear && (
+          <div className="mb-8">
+            <label htmlFor="topic-select" className="block text-lg font-medium text-orange-700 mb-2">
+              Select a Topic:
+            </label>
+            <select
+              id="topic-select"
+              value={selectedTopic}
+              onChange={(e) => setSelectedTopic(e.target.value)}
+              className="w-full p-3 border border-orange-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
+            >
+              <option value="">-- Select a topic --</option>
+              {topics.map((topic) => (
+                <option key={topic} value={topic}>
+                  {topic}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+
+        {/* Questions */}
         {questions.length > 0 ? (
           <div className="space-y-6">
             {questions.map((question) => {
-              // tolerant schema handling:
               const questionImage = question.questionImageUrl || question.questionImage || question.imageUrl || null;
               const explanationImage = question.explanationImageUrl || question.explanationImage || null;
               const correctIndex = (question.correctAnswer ?? question.answer);
@@ -207,7 +255,6 @@ function Questions() {
 
                   <div className="space-y-2 mb-4">
                     {question.options && question.options.map((option, index) => {
-                      // option may be string or { text: "..." }
                       const optionText = typeof option === 'string' ? option : (option.text ?? '');
                       const isSelected = selectedAnswers[question.id] === index;
                       const isCorrect = correctIndex === index;
@@ -263,7 +310,7 @@ function Questions() {
         ) : selectedTopic ? (
           <p className="text-center text-gray-600">No questions found for this topic.</p>
         ) : (
-          <p className="text-center text-gray-600">Please select a topic to view questions.</p>
+          <p className="text-center text-gray-600">Please select a year and topic to view questions.</p>
         )}
       </div>
     </div>
