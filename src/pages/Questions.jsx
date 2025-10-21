@@ -4,7 +4,7 @@ import { db } from '../firebase';
 
 console.log("Questions.jsx is being rendered");
 
-const LOCAL_KEY = `sams_authenticated_${CORRECT_PASSWORD}`;
+const LOCAL_KEY = 'sams_authenticated'; // localStorage key
 const CORRECT_PASSWORD = 'SAMS354790';
 
 function Questions() {
