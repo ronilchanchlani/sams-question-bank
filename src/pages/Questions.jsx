@@ -91,7 +91,7 @@ function Questions() {
         const data = doc.data() || {};
         if (data.topic) uniqueTopics.add(data.topic);
       });
-      setTopics(Array.from(uniqueTopics));
+      setTopics(Array.from(uniqueTopics).sort((a, b) => a.localeCompare(b, undefined, { numeric: true })));
     }, (err) => {
       console.error('Failed to fetch topics:', err);
     });
@@ -318,3 +318,4 @@ function Questions() {
 }
 
 export default Questions;
+
