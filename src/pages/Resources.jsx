@@ -1,6 +1,6 @@
 // src/pages/Resources.jsx
 import React, { useState, useEffect } from 'react';
-import { collection, query, where, onSnapshot } from 'firebase/firestore';
+import { collection, query, where, getDocs } from 'firebase/firestore';
 import { db } from '../firebase';
 
 const LOCAL_KEY = 'sams_authenticated';
@@ -17,7 +17,7 @@ function Resources() {
   const [enteredPassword, setEnteredPassword] = useState('');
   const [authenticated, setAuthenticated] = useState(false);
 
-  // Remember login
+  // On page load, restore auth
   useEffect(() => {
     if (localStorage.getItem(LOCAL_KEY) === 'true') {
       setAuthenticated(true);
@@ -38,6 +38,8 @@ function Resources() {
     setAuthenticated(false);
     setEnteredPassword('');
     localStorage.removeItem(LOCAL_KEY);
+
+    // Reset everything
     setYears([]);
     setTopics([]);
     setSelectedYear('');
@@ -46,67 +48,78 @@ function Resources() {
     setExpandedResource(null);
   };
 
-  // Fetch available years
+  // Fetch unique years once
   useEffect(() => {
     if (!authenticated) return;
 
-    const unsubscribe = onSnapshot(collection(db, 'resources'), (snapshot) => {
+    const fetchYears = async () => {
+      const snap = await getDocs(collection(db, 'resources'));
       const uniqueYears = new Set();
-      snapshot.forEach((doc) => {
+
+      snap.forEach((doc) => {
         const data = doc.data() || {};
         if (data.year) uniqueYears.add(data.year);
       });
-      setYears(Array.from(uniqueYears).sort());
-    });
 
-    return () => unsubscribe();
+      setYears(Array.from(uniqueYears).sort());
+    };
+
+    fetchYears();
   }, [authenticated]);
 
-  // Fetch topics based on selected year
+  // Fetch topics when year is selected
   useEffect(() => {
     if (!authenticated || !selectedYear) return;
 
-    const q = query(collection(db, 'resources'), where('year', '==', selectedYear));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
+    const fetchTopics = async () => {
+      const q = query(
+        collection(db, 'resources'),
+        where('year', '==', selectedYear)
+      );
+
+      const snap = await getDocs(q);
       const uniqueTopics = new Set();
-      snapshot.forEach((doc) => {
+
+      snap.forEach((doc) => {
         const data = doc.data() || {};
         if (data.topic) uniqueTopics.add(data.topic);
       });
+
       setTopics(Array.from(uniqueTopics).sort());
       setSelectedTopic(''); // Reset topic when year changes
-    });
+    };
 
-    return () => unsubscribe();
+    fetchTopics();
   }, [selectedYear, authenticated]);
 
-  // Fetch resources based on selected year + topic
+  // Fetch resources for the selected year + topic
   useEffect(() => {
     if (!authenticated || !selectedYear || !selectedTopic) return;
 
-    const q = query(
-      collection(db, 'resources'),
-      where('year', '==', selectedYear),
-      where('topic', '==', selectedTopic)
-    );
+    const fetchResources = async () => {
+      const q = query(
+        collection(db, 'resources'),
+        where('year', '==', selectedYear),
+        where('topic', '==', selectedTopic)
+      );
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const resData = [];
-      snapshot.forEach((doc) => {
-        resData.push({ id: doc.id, ...doc.data() });
-      });
-      setResources(resData);
+      const snap = await getDocs(q);
+      const resArr = [];
+
+      snap.forEach((doc) => resArr.push({ id: doc.id, ...doc.data() }));
+
+      setResources(resArr);
       setExpandedResource(null);
-    });
+    };
 
-    return () => unsubscribe();
+    fetchResources();
   }, [selectedYear, selectedTopic, authenticated]);
 
   const toggleResource = (id) => {
     setExpandedResource(expandedResource === id ? null : id);
   };
 
-  // Password gate
+  // Authentication Page
   if (!authenticated) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-orange-50">
@@ -137,6 +150,7 @@ function Resources() {
   return (
     <div className='bg-gradient-to-b from-orange-100 to-orange-50 min-h-screen py-12 px-6 md:px-12'>
       <div className="max-w-4xl mx-auto">
+
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-3xl font-bold text-orange-800">Resources</h1>
           <button
@@ -147,43 +161,37 @@ function Resources() {
           </button>
         </div>
 
-        {/* Year selection */}
+        {/* Year selector */}
         <div className="mb-8">
-          <label htmlFor="year-select" className="block text-lg font-medium text-orange-700 mb-2">
+          <label className="block text-lg font-medium text-orange-700 mb-2">
             Select Year:
           </label>
           <select
-            id="year-select"
             value={selectedYear}
             onChange={(e) => setSelectedYear(e.target.value)}
             className="w-full p-3 border border-orange-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
           >
             <option value="">-- Select a year --</option>
-            {years.map((year) => (
-              <option key={year} value={year}>
-                {year}
-              </option>
+            {years.map((y) => (
+              <option key={y} value={y}>{y}</option>
             ))}
           </select>
         </div>
 
-        {/* Topic selection */}
+        {/* Topic selector */}
         {selectedYear && (
           <div className="mb-8">
-            <label htmlFor="topic-select" className="block text-lg font-medium text-orange-700 mb-2">
+            <label className="block text-lg font-medium text-orange-700 mb-2">
               Select Topic:
             </label>
             <select
-              id="topic-select"
               value={selectedTopic}
               onChange={(e) => setSelectedTopic(e.target.value)}
               className="w-full p-3 border border-orange-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
             >
               <option value="">-- Select a topic --</option>
-              {topics.map((topic) => (
-                <option key={topic} value={topic}>
-                  {topic}
-                </option>
+              {topics.map((t) => (
+                <option key={t} value={t}>{t}</option>
               ))}
             </select>
           </div>
@@ -207,7 +215,9 @@ function Resources() {
 
                 {expandedResource === res.id && (
                   <div className="mt-4 p-4 bg-gray-50 rounded-md">
-                    <p className="text-gray-700">{res.description || 'No additional details.'}</p>
+                    <p className="text-gray-700">
+                      {res.description || 'No additional details.'}
+                    </p>
                   </div>
                 )}
               </div>
