@@ -1,4 +1,3 @@
-// src/pages/Resources.jsx
 import React, { useState, useEffect } from 'react';
 import { collection, query, where, getDocs } from 'firebase/firestore';
 import { db } from '../firebase';
@@ -17,7 +16,7 @@ function Resources() {
   const [enteredPassword, setEnteredPassword] = useState('');
   const [authenticated, setAuthenticated] = useState(false);
 
-  // On page load, restore auth
+  // Remember login
   useEffect(() => {
     if (localStorage.getItem(LOCAL_KEY) === 'true') {
       setAuthenticated(true);
@@ -25,7 +24,7 @@ function Resources() {
   }, []);
 
   const handleLogin = (e) => {
-    e && e.preventDefault();
+    e?.preventDefault();
     if (enteredPassword.trim() === CORRECT_PASSWORD) {
       setAuthenticated(true);
       localStorage.setItem(LOCAL_KEY, 'true');
@@ -38,8 +37,6 @@ function Resources() {
     setAuthenticated(false);
     setEnteredPassword('');
     localStorage.removeItem(LOCAL_KEY);
-
-    // Reset everything
     setYears([]);
     setTopics([]);
     setSelectedYear('');
@@ -48,68 +45,73 @@ function Resources() {
     setExpandedResource(null);
   };
 
-  // Fetch unique years once
+  // Fetch years once
   useEffect(() => {
     if (!authenticated) return;
 
     const fetchYears = async () => {
-      const snap = await getDocs(collection(db, 'resources'));
-      const uniqueYears = new Set();
-
-      snap.forEach((doc) => {
-        const data = doc.data() || {};
-        if (data.year) uniqueYears.add(data.year);
-      });
-
-      setYears(Array.from(uniqueYears).sort());
+      try {
+        const snapshot = await getDocs(collection(db, 'resources'));
+        const uniqueYears = new Set();
+        snapshot.forEach((doc) => {
+          const data = doc.data();
+          if (data.year) uniqueYears.add(data.year);
+        });
+        setYears(Array.from(uniqueYears).sort());
+      } catch (err) {
+        console.error('Failed to fetch years:', err);
+      }
     };
 
     fetchYears();
   }, [authenticated]);
 
-  // Fetch topics when year is selected
+  // Fetch topics for selected year
   useEffect(() => {
-    if (!authenticated || !selectedYear) return;
+    if (!authenticated || !selectedYear) {
+      setTopics([]);
+      setSelectedTopic('');
+      return;
+    }
 
     const fetchTopics = async () => {
-      const q = query(
-        collection(db, 'resources'),
-        where('year', '==', selectedYear)
-      );
+      try {
+        const q = query(collection(db, 'resources'), where('year', '==', selectedYear));
+        const snapshot = await getDocs(q);
+        const uniqueTopics = new Set();
+        snapshot.forEach((doc) => {
+          const data = doc.data();
+          if (data.topic) uniqueTopics.add(data.topic);
+        });
 
-      const snap = await getDocs(q);
-      const uniqueTopics = new Set();
-
-      snap.forEach((doc) => {
-        const data = doc.data() || {};
-        if (data.topic) uniqueTopics.add(data.topic);
-      });
-
-      setTopics(Array.from(uniqueTopics).sort());
-      setSelectedTopic(''); // Reset topic when year changes
+        setTopics(Array.from(uniqueTopics).sort());
+        setSelectedTopic('');
+      } catch (err) {
+        console.error('Failed to fetch topics:', err);
+      }
     };
 
     fetchTopics();
   }, [selectedYear, authenticated]);
 
-  // Fetch resources for the selected year + topic
+  // Fetch resources for selected year + topic
   useEffect(() => {
     if (!authenticated || !selectedYear || !selectedTopic) return;
 
     const fetchResources = async () => {
-      const q = query(
-        collection(db, 'resources'),
-        where('year', '==', selectedYear),
-        where('topic', '==', selectedTopic)
-      );
-
-      const snap = await getDocs(q);
-      const resArr = [];
-
-      snap.forEach((doc) => resArr.push({ id: doc.id, ...doc.data() }));
-
-      setResources(resArr);
-      setExpandedResource(null);
+      try {
+        const q = query(
+          collection(db, 'resources'),
+          where('year', '==', selectedYear),
+          where('topic', '==', selectedTopic)
+        );
+        const snapshot = await getDocs(q);
+        const resData = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+        setResources(resData);
+        setExpandedResource(null);
+      } catch (err) {
+        console.error('Failed to fetch resources:', err);
+      }
     };
 
     fetchResources();
@@ -119,14 +121,12 @@ function Resources() {
     setExpandedResource(expandedResource === id ? null : id);
   };
 
-  // Authentication Page
+  // Password gate
   if (!authenticated) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-orange-50">
         <div className="p-6 bg-white rounded-2xl shadow-lg w-80">
-          <h1 className="text-xl font-bold mb-4 text-center text-orange-700">
-            Enter Password
-          </h1>
+          <h1 className="text-xl font-bold mb-4 text-center text-orange-700">Enter Password</h1>
           <form onSubmit={handleLogin} className="flex flex-col gap-4">
             <input
               type="password"
@@ -148,9 +148,8 @@ function Resources() {
   }
 
   return (
-    <div className='bg-gradient-to-b from-orange-100 to-orange-50 min-h-screen py-12 px-6 md:px-12'>
+    <div className="bg-gradient-to-b from-orange-100 to-orange-50 min-h-screen py-12 px-6 md:px-12">
       <div className="max-w-4xl mx-auto">
-
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-3xl font-bold text-orange-800">Resources</h1>
           <button
@@ -161,37 +160,39 @@ function Resources() {
           </button>
         </div>
 
-        {/* Year selector */}
+        {/* Year selection */}
         <div className="mb-8">
-          <label className="block text-lg font-medium text-orange-700 mb-2">
+          <label htmlFor="year-select" className="block text-lg font-medium text-orange-700 mb-2">
             Select Year:
           </label>
           <select
+            id="year-select"
             value={selectedYear}
             onChange={(e) => setSelectedYear(e.target.value)}
             className="w-full p-3 border border-orange-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
           >
             <option value="">-- Select a year --</option>
-            {years.map((y) => (
-              <option key={y} value={y}>{y}</option>
+            {years.map((year) => (
+              <option key={year} value={year}>{year}</option>
             ))}
           </select>
         </div>
 
-        {/* Topic selector */}
+        {/* Topic selection */}
         {selectedYear && (
           <div className="mb-8">
-            <label className="block text-lg font-medium text-orange-700 mb-2">
+            <label htmlFor="topic-select" className="block text-lg font-medium text-orange-700 mb-2">
               Select Topic:
             </label>
             <select
+              id="topic-select"
               value={selectedTopic}
               onChange={(e) => setSelectedTopic(e.target.value)}
               className="w-full p-3 border border-orange-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
             >
               <option value="">-- Select a topic --</option>
-              {topics.map((t) => (
-                <option key={t} value={t}>{t}</option>
+              {topics.map((topic) => (
+                <option key={topic} value={topic}>{topic}</option>
               ))}
             </select>
           </div>
@@ -202,9 +203,7 @@ function Resources() {
           <div className="space-y-6">
             {resources.map((res) => (
               <div key={res.id} className="bg-white p-6 rounded-lg shadow-md">
-                <h2 className="text-xl font-semibold text-orange-800 mb-2">
-                  {res.title || res.topic}
-                </h2>
+                <h2 className="text-xl font-semibold text-orange-800 mb-2">{res.title || res.topic}</h2>
 
                 <button
                   onClick={() => window.open(res.resourceUrl, '_blank')}
@@ -215,9 +214,7 @@ function Resources() {
 
                 {expandedResource === res.id && (
                   <div className="mt-4 p-4 bg-gray-50 rounded-md">
-                    <p className="text-gray-700">
-                      {res.description || 'No additional details.'}
-                    </p>
+                    <p className="text-gray-700">{res.description || 'No additional details.'}</p>
                   </div>
                 )}
               </div>
